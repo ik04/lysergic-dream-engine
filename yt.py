@@ -107,7 +107,9 @@ if __name__ == "__main__":
 
     video_file = sys.argv[1]
     playlist_id = sys.argv[2] if len(sys.argv) > 2 else None
-    title = video_file.replace(".mp4", "").replace("_", " ")
+    
+    base_name = os.path.basename(video_file)
+    title = os.path.splitext(base_name)[0].replace("_", " ")
 
 
     upload_video(video_file, title, playlist_id)
