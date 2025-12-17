@@ -11,6 +11,7 @@ logger = logging.getLogger(__name__)
 AUDIO_SCRIPT = "audio.py"
 VIDEO_SCRIPT = "video.py"
 YT_SCRIPT = "yt.py"
+
 # Optional experience URL argument
 experience_url = sys.argv[1] if len(sys.argv) > 1 else None
 
@@ -35,36 +36,36 @@ logger.info("Generated audio: %s", audio_file)
 # Run video.py with audio
 # -------------------------
 logger.info("Running video.py...")
-video_result = subprocess.run(["python", VIDEO_SCRIPT, audio_file])
+video_result = subprocess.run(
+    ["python", VIDEO_SCRIPT, audio_file],
+    capture_output=True,  # <-- important
+    text=True              # <-- important
+)
 if video_result.returncode != 0:
-    logger.error("video.py failed!")
+    logger.error("video.py failed!\n%s", video_result.stderr)
     exit(1)
 
-
+# Only take the last line of stdout as the video file
 video_file = video_result.stdout.strip().splitlines()[-1]
+logger.info("Generated video: %s", video_file)
+
 # -------------------------
 # Upload to YouTube
 # -------------------------
 logger.info("Uploading to YouTube...")
-
-# Extract title from filename
-title = audio_file.replace(".wav", "").replace("_", " ")
 
 PLAYLIST_ID = "PL6-XViE7MT_Br2si0sy6AHk_omwmj9q4G"
 
 yt_result = subprocess.run([
     "python",
     YT_SCRIPT,
-    video_file,   # or whatever video.py outputs
-    title,
+    video_file,  # the video file path from video.py
     PLAYLIST_ID
-])
+], capture_output=True, text=True)
 
 if yt_result.returncode != 0:
-    logger.error("yt.py failed!")
+    logger.error("yt.py failed!\n%s", yt_result.stderr)
     exit(1)
 
 logger.info("YouTube upload completed!")
-
-
 logger.info("Pipeline completed successfully!")

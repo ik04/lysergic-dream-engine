@@ -101,12 +101,13 @@ def upload_video(video_path, title, playlist_id=None):
 
 
 if __name__ == "__main__":
-    if len(sys.argv) < 3:
-        print("Usage: python yt.py <video.mp4> <title> [playlist_id]")
+    if len(sys.argv) < 2:
+        print("Usage: python yt.py <video.mp4> [playlist_id]")
         sys.exit(1)
 
     video_file = sys.argv[1]
-    title = sys.argv[2]
-    playlist_id = sys.argv[3] if len(sys.argv) > 3 else None
+    playlist_id = sys.argv[2] if len(sys.argv) > 2 else None
+    title = video_file.replace(".mp4", "").replace("_", " ")
+
 
     upload_video(video_file, title, playlist_id)
