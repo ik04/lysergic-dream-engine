@@ -9,7 +9,6 @@ import logging
 import string
 import sys
 from urllib.parse import unquote
-import librosa
 from collections import Counter
 
 from google import genai
@@ -164,6 +163,9 @@ data = resp.json().get("data", {})
 
 raw_content = data.get("content", "")
 
+# -------------------------
+# Clean + extract primary substance
+# -------------------------
 cleaned_content, gemini_primary = clean_and_extract(raw_content)
 
 # -------------------------
@@ -225,8 +227,15 @@ sr = tts.synthesizer.output_sample_rate
 
 segments = split_with_punctuation(normalize_text(tts_script))
 audio_parts = []
+last_spoken = None  # deduplication logic
 
 for text, pause in segments:
+    normalized = normalize_text(text).lower()
+    if normalized == last_spoken:
+        logger.warning("Skipping duplicate segment: %s", text[:60])
+        continue
+    last_spoken = normalized
+
     logger.info("Synthesizing: %s...", text[:40])
     wav = tts.tts(text=text, speaker="p232")
     audio_parts.append(wav)
