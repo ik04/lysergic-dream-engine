@@ -10,6 +10,7 @@ import string
 import sys
 from urllib.parse import unquote
 import librosa
+from collections import Counter
 
 from google import genai
 
@@ -61,14 +62,42 @@ def split_with_punctuation(text: str):
     return result
 
 # -------------------------
-# Gemini cleanup + extract primary substance
+# Substance frequency detection
+# -------------------------
+SUBSTANCES = [
+    "LSD",
+    "DMT",
+    "Salvia",
+    "MDMA",
+    "Cannabis",
+    "Heroin",
+]
+
+def detect_primary_substance_by_frequency(text: str) -> str | None:
+    text_lower = text.lower()
+    counts = Counter()
+
+    for substance in SUBSTANCES:
+        pattern = rf"\b{substance.lower()}\b"
+        matches = re.findall(pattern, text_lower)
+        if matches:
+            counts[substance] += len(matches)
+
+    if not counts:
+        return None
+
+    logger.info("Substance frequency counts: %s", dict(counts))
+    return counts.most_common(1)[0][0]
+
+# -------------------------
+# Gemini cleanup + extract
 # -------------------------
 def clean_and_extract(content: str):
     prompt = (
         "Clean up the following experience content by fixing punctuation "
-        "and removing repeated sentences, then return a JSON object with:\n"
-        "  {\"cleaned_content\": ..., \"primary_substance\": ...}\n"
-        "Do not add extra keys.\n"
+        "and removing repeated sentences. Then return a JSON object with:\n"
+        "{ \"cleaned_content\": string, \"primary_substance\": string }\n"
+        "Do not add extra keys.\n\n"
         f"Content:\n{content}"
     )
 
@@ -78,19 +107,23 @@ def clean_and_extract(content: str):
     )
 
     text_out = response.text.strip()
-    # Try to parse JSON
+
     import json
     try:
         parsed = json.loads(text_out)
-        return parsed.get("cleaned_content", content), parsed.get("primary_substance", "Unknown")
+        return (
+            parsed.get("cleaned_content", content),
+            parsed.get("primary_substance", "Unknown"),
+        )
     except json.JSONDecodeError:
         logger.warning("Gemini output not JSON; using fallback")
-        fallback_clean = content
-        fallback_primary = "Unknown"
-        match = re.search(r'\b(LSD|DMT|Salvia|MDMA|Cannabis)\b', content, re.IGNORECASE)
-        if match:
-            fallback_primary = match.group(0)
-        return fallback_clean, fallback_primary
+        match = re.search(
+            r'\b(LSD|DMT|Salvia|MDMA|Cannabis|Heroin)\b',
+            content,
+            re.IGNORECASE
+        )
+        fallback_primary = match.group(0) if match else "Unknown"
+        return content, fallback_primary
 
 # -------------------------
 # Parse experience URL
@@ -112,7 +145,8 @@ if not experience_url:
             "https://www.erowid.org/chemicals/lsd/lsd.shtml",
             "https://www.erowid.org/plants/salvia/salvia.shtml",
             "https://www.erowid.org/plants/cannabis/cannabis.shtml",
-            "https://www.erowid.org/chemicals/mdma/mdma.shtml"
+            "https://www.erowid.org/chemicals/mdma/mdma.shtml",
+            "https://www.erowid.org/chemicals/heroin/heroin.shtml",
         ]
     }
     experience = requests.post(url, json=substances).json()
@@ -122,12 +156,33 @@ if not experience_url:
 # Fetch experience details
 # -------------------------
 logger.info("Fetching full experience details")
-resp = requests.post("https://lysergic.kaizenklass.xyz/api/v1/erowid/experience", json={"url": experience_url})
+resp = requests.post(
+    "https://lysergic.kaizenklass.xyz/api/v1/erowid/experience",
+    json={"url": experience_url},
+)
 data = resp.json().get("data", {})
 
 raw_content = data.get("content", "")
-cleaned_content, primary_substance = clean_and_extract(raw_content)
-logger.info("Primary substance: %s", primary_substance)
+
+cleaned_content, gemini_primary = clean_and_extract(raw_content)
+
+# -------------------------
+# Determine final primary substance
+# -------------------------
+primary_substance = detect_primary_substance_by_frequency(cleaned_content)
+
+if not primary_substance:
+    primary_substance = gemini_primary
+
+if not primary_substance or primary_substance == "Unknown":
+    match = re.search(
+        r'\b(LSD|DMT|Salvia|MDMA|Cannabis|Heroin)\b',
+        cleaned_content,
+        re.IGNORECASE
+    )
+    primary_substance = match.group(0) if match else "Unknown"
+
+logger.info("Final primary substance: %s", primary_substance)
 
 # -------------------------
 # Build TTS text
@@ -146,11 +201,11 @@ This is a narrated experience report from Erowid.org.
 
 {clean_experience['title']}.
 
+A {primary_substance} Trip Report.
+
 Submitted by {clean_experience['username']}.
 Age: {clean_experience['age']}.
 Gender: {clean_experience['gender']}.
-
-Primary substance: {primary_substance}.
 
 {cleaned_content}
 
@@ -161,7 +216,11 @@ Thank you for listening.
 # Generate audio
 # -------------------------
 logger.info("Loading TTS model")
-tts = TTS(model_name="tts_models/en/vctk/vits", progress_bar=False, gpu=False)
+tts = TTS(
+    model_name="tts_models/en/vctk/vits",
+    progress_bar=False,
+    gpu=False
+)
 sr = tts.synthesizer.output_sample_rate
 
 segments = split_with_punctuation(normalize_text(tts_script))
