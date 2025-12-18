@@ -8,7 +8,6 @@ import logging
 import string
 import sys
 from urllib.parse import unquote
-import librosa
 from collections import Counter
 
 # -------------------------
@@ -158,8 +157,7 @@ tts_script = f"""
 Welcome.
 
 This is a narrated experience report sourced from Erowid dot org,
-a public archive of psychoactive experience reports shared for
-educational and harm reduction purposes.
+generated using The Lysergic Dream Engine.
 
 This video is not an endorsement, not medical advice,
 and does not encourage illegal activity.
@@ -168,7 +166,7 @@ Listener discretion is advised.
 
 {clean_experience['title']}.
 
-A {primary_substance} Trip Report.
+{("an" if primary_substance in ["LSD", "MDMA"] else "a")} {primary_substance} Trip Report.
 
 This experience was submitted under the username
 {clean_experience['username']}.
@@ -178,7 +176,7 @@ Reported gender: {clean_experience['gender']}.
 
 {clean_experience['content']}
 
-I Hope you found this experience report informative and enjoyable.
+I hope you found this experience report informative and enjoyable.
 
 Thank you for listening.
 """
@@ -200,11 +198,21 @@ speaker = "p232"
 sr = tts.synthesizer.output_sample_rate
 
 # -------------------------
-# Generate audio
+# Generate audio (DEDUP UPGRADE)
 # -------------------------
 audio_parts = []
+last_spoken = None  # <-- upgrade
 
 for text, pause in segments:
+    normalized = normalize_text(text).lower()
+
+    # Skip consecutive duplicate chunks
+    if normalized == last_spoken:
+        logger.warning("Skipping duplicate segment: %s", text[:60])
+        continue
+
+    last_spoken = normalized
+
     logger.info("Speaking: %s", text[:60])
     wav = tts.tts(text=text, speaker=speaker)
     audio_parts.append(wav)
