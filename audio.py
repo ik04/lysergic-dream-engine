@@ -35,9 +35,6 @@ def sanitize_filename(name: str) -> str:
     return "".join(c for c in name if c in valid_chars).replace(" ", "_")
 
 def split_with_punctuation(text: str):
-    """
-    Returns list of (text, pause_seconds)
-    """
     parts = re.findall(r'[^.,!?;:]+[.,!?;:]?', text)
     result = []
 
@@ -47,47 +44,41 @@ def split_with_punctuation(text: str):
             continue
 
         last_char = part[-1]
-        if last_char in ".!?":
-            pause = 1.0
-        elif last_char in ",;:":
-            pause = 0.3
-        else:
-            pause = 0.3
-
+        pause = 1.0 if last_char in ".!?" else 0.3
         result.append((part, pause))
 
     return result
 
 # -------------------------
-# Substance frequency detection
+# Substance frequency detection (with aliases)
 # -------------------------
-SUBSTANCES = [
-    "LSD",
-    "DMT",
-    "Salvia",
-    "MDMA",
-    "Cannabis",
-    "Heroin",
-    "Cocaine",
-    "Ketamine",
-]
+SUBSTANCE_ALIASES = {
+    "LSD": ["lsd"],
+    "DMT": ["dmt"],
+    "Salvia": ["salvia"],
+    "MDMA": ["mdma", "ecstasy", "molly"],
+    "Cannabis": ["cannabis", "weed", "marijuana", "pot"],
+    "Heroin": ["heroin"],
+    "Cocaine": ["cocaine", "coke"],
+    "Ketamine": ["ketamine", "ket"],
+}
 
 def detect_primary_substance(text: str) -> str:
     text_lower = text.lower()
     counts = Counter()
 
-    for substance in SUBSTANCES:
-        pattern = rf"\b{substance.lower()}\b"
-        matches = re.findall(pattern, text_lower)
-        if matches:
-            counts[substance] += len(matches)
+    for substance, aliases in SUBSTANCE_ALIASES.items():
+        for alias in aliases:
+            pattern = rf"\b{alias}\b"
+            matches = re.findall(pattern, text_lower)
+            if matches:
+                counts[substance] += len(matches)
 
     if not counts:
         return "Unknown"
 
-    primary, _ = counts.most_common(1)[0]
     logger.info("Substance frequency: %s", dict(counts))
-    return primary
+    return counts.most_common(1)[0][0]
 
 # -------------------------
 # Check for URL argument
@@ -157,6 +148,8 @@ logger.info("Primary substance detected: %s", primary_substance)
 # -------------------------
 # Build narration script
 # -------------------------
+article = "an" if primary_substance in ["LSD", "MDMA"] else "a"
+
 tts_script = f"""
 Welcome.
 
@@ -170,7 +163,7 @@ Listener discretion is advised.
 
 {clean_experience['title']}.
 
-{("an" if primary_substance in ["LSD", "MDMA"] else "a")} {primary_substance} Trip Report.
+{article} {primary_substance} Trip Report.
 
 This experience was submitted under the username
 {clean_experience['username']}.
@@ -205,12 +198,11 @@ sr = tts.synthesizer.output_sample_rate
 # Generate audio (DEDUP UPGRADE)
 # -------------------------
 audio_parts = []
-last_spoken = None  # <-- upgrade
+last_spoken = None
 
 for text, pause in segments:
     normalized = normalize_text(text).lower()
 
-    # Skip consecutive duplicate chunks
     if normalized == last_spoken:
         logger.warning("Skipping duplicate segment: %s", text[:60])
         continue
