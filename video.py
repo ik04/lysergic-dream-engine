@@ -40,7 +40,7 @@ temp_video = os.path.join(output_folder, f"{base_name}_nosubs.mp4")
 output_file = os.path.join(output_folder, f"{base_name}.mp4")
 
 # -------------------------
-# Clean SRT
+# Clean SRT (punctuation + spacing only)
 # -------------------------
 def clean_srt(path: str):
     logger.info("Cleaning subtitles: %s", path)
@@ -50,22 +50,26 @@ def clean_srt(path: str):
 
     cleaned = []
     for line in lines:
-        # Skip index and timestamps
-        if re.match(r"^\d+$", line.strip()):
+        stripped = line.strip()
+
+        # Keep indices
+        if stripped.isdigit():
             cleaned.append(line)
             continue
 
+        # Keep timestamps
         if "-->" in line:
             cleaned.append(line)
             continue
 
-        text = line.strip()
-
-        if not text:
+        # Preserve blank lines
+        if not stripped:
             cleaned.append("\n")
             continue
 
-        # Fix spacing & punctuation only
+        text = stripped
+
+        # Fix spacing around punctuation only
         text = re.sub(r"\s+([,.!?])", r"\1", text)
         text = re.sub(r"([,.!?])([A-Za-z])", r"\1 \2", text)
         text = re.sub(r"\s+", " ", text)
@@ -138,6 +142,8 @@ if os.path.exists(subtitle_file):
     subprocess.run(ffmpeg_cmd, check=True)
 
     os.remove(temp_video)
+    os.remove(subtitle_file)
+    logger.info("Removed subtitle file: %s", subtitle_file)
 
 else:
     logger.warning("No subtitles found, skipping burn-in")
