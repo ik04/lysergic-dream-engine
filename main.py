@@ -1,7 +1,10 @@
 import subprocess
 import logging
 import sys
+from dotenv import load_dotenv
+import os
 
+load_dotenv()
 logging.basicConfig(
     level=logging.INFO,
     format="%(asctime)s [%(levelname)s] %(message)s",
@@ -74,7 +77,8 @@ logger.info("Generated video: %s", video_file)
 # -------------------------
 # Upload to YouTube
 # -------------------------
-PLAYLIST_ID = "PL6-XViE7MT_Br2si0sy6AHk_omwmj9q4G"
+logger.info("Preparing to upload to YouTube...")
+PLAYLIST_ID = os.getenv("YT_PLAYLIST_ID")
 
 if not auto_upload:
     answer = input("Upload video to YouTube? [y/n]: ").strip().lower()
