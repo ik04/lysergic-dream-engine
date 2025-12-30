@@ -1,0 +1,12 @@
+version: "3.9"
+
+services:
+  lysergic:
+    build: .
+    container_name: lysergic-engine
+    env_file:
+      - .env
+    volumes:
+      - ./temp:/app/temp
+      - ./client_secret.json:/app/client_secret.json
+      - ./youtube_token.json:/app/youtube_token.json

@@ -1,8 +1,9 @@
 import subprocess
 import logging
 import sys
-from dotenv import load_dotenv
 import os
+from dotenv import load_dotenv
+import argparse
 
 load_dotenv()
 
@@ -18,19 +19,21 @@ VIDEO_SCRIPT = "video.py"
 YT_SCRIPT = "yt.py"
 
 # -------------------------
-# Parse arguments
+# Argument parsing
 # -------------------------
-experience_url = None
-auto_upload = False
-use_gemini = False
+parser = argparse.ArgumentParser(description="Run Lysergic Podcast pipeline")
+parser.add_argument("experience_url", nargs="?", help="URL or path of the experience")
+parser.add_argument("-y", "--yes", action="store_true", help="Auto-upload to YouTube")
+parser.add_argument("-g", "--gemini", action="store_true", help="Use Gemini audio script")
 
-for arg in sys.argv[1:]:
-    if arg == "-y":
-        auto_upload = True
-    elif arg == "-g":
-        use_gemini = True
-    else:
-        experience_url = arg
+args = parser.parse_args()
+
+experience_url = args.experience_url
+auto_upload = args.yes
+use_gemini = args.gemini
+
+logger.info("experience_url=%s, auto_upload=%s, use_gemini=%s",
+            experience_url, auto_upload, use_gemini)
 
 # -------------------------
 # Choose audio script
@@ -111,7 +114,6 @@ if not auto_upload:
         sys.exit(0)
 
 logger.info("Uploading to YouTube...")
-
 yt_cmd = [
     "python",
     YT_SCRIPT,
@@ -123,7 +125,11 @@ yt_cmd = [
 if frontend_experience_url:
     yt_cmd.append(frontend_experience_url)
 
-subprocess.run(yt_cmd, check=True)
+try:
+    subprocess.run(yt_cmd, check=True)
+except subprocess.CalledProcessError:
+    logger.error("YouTube upload failed!")
+    sys.exit(1)
 
 logger.info("YouTube upload completed!")
 logger.info("Pipeline completed successfully!")
